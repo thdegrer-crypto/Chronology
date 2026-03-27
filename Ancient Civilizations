@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Ancient History</title>
+<style>
+  :root{
+    /* Compact spacing */
+    --slot-w:80px; --slot-h:34px; --gap:4px;
+
+    /* Axis & offsets */
+    --lane-h:210px; --axis-top:108px;
+    --off-top:80px;     /* top capsule distance from axis */
+    --off-bottom:50px;  /* bottom capsule distance (raised closer to axis) */
+    --stem-scale:0.65;  /* stems are 65% of the offset */
+
+    /* Theme */
+    --fg:#2a1a00; --muted:#4b2e05;
+    --bg1:#e2ce22; --bg2:rgb(227,193,45); --bg3:#a48c200;
+
+    /* Buttons */
+    --btn:#cf5950; --btn-b:#a14d14; --btnH:#cc5a16;
+    --btnP:#b1271e; --btnP-b:#8b1d1d; --btnP-H:#7c3a19;
+
+    /* Timeline colors */
+    --axis:#000;  /* black axis */
+    --stem:#777;  /* medium gray stems */
+
+    /* Capsules & chips */
+    --cap-bg:rgba(255,242,155,0.78); --cap-b:#a5691c;
+    --chip-bg:#fff9e6; --chip-b:#a5691c;
+  }
+
+  *{box-sizing:border-box}
+  html,body{
+    margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; color:var(--fg);
+    background:linear-gradient(to bottom, var(--bg1) 0%, var(--bg2) 50%, var(--bg3) 100%);
+  }
+  .wrap{width:100%;padding:16px 10px}
+  h1{margin:0 0 4px;font-size:26px}
+  .sub{color:var(--muted);margin-bottom:10px}
+
+  button{background:var(--btn);color:var(--fg);border:1px solid var(--btn-b);border-radius:12px;padding:8px 12px;cursor:pointer;transition:background .2s}
+  button:hover{background:var(--btnH)}
+  button.primary{background:var(--btnP);border:1px solid var(--btnP-b);color:#fff;font-weight:700}
+  button.primary:hover{background:var(--btnP-H)}
+
+  .panel{background:#ffe9b388;border:1px solid #a5691c;border-radius:14px;padding:10px;margin-bottom:10px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+  .hud{display:flex;gap:14px;align-items:center;font-weight:700;color:#3a2606}
+  .hud .pill{padding:4px 8px;border:1px solid #a5691c;border-radius:999px;background:#fff9e0}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:#fff4d7;border:1px solid var(--chip-b);border-radius:10px}
+  .chip{
+    user-select:none; -webkit-user-select:none; touch-action:none;
+    background:var(--chip-bg); border:1px solid var(--chip-b);
+    padding:6px 10px; border-radius:999px; box-shadow:0 4px 10px rgba(0,0,0,.08);
+    cursor:grab; font-weight:600; font-size:14px; white-space:nowrap; max-width:360px; overflow:hidden; text-overflow:ellipsis;
+  }
+  .chip.dragging{opacity:.93;cursor:grabbing;box-shadow:0 8px 16px rgba(0,0,0,.18)}
+  .ghost{position:fixed;left:0;top:0;pointer-events:none;z-index:9999;transform:translate3d(0,0,0)}
+
+  /* Timeline */
+  .lane-wrap{position:relative;border:1px solid #d8c195;background:#fff;border-radius:12px;padding:14px;overflow-x:hidden}
+  .lane{position:relative;height:var(--lane-h);min-width:100%}
+  .axis{position:absolute;left:0;right:0;top:var(--axis-top);height:2px;background:var(--axis);z-index:2;pointer-events:none}
+
+  .stem{position:absolute;width:2px;background:var(--stem);z-index:2;pointer-events:none}
+
+  /* Date labels; we place them above for top slots, below for bottom slots */
+  .date{
+    position:absolute; z-index:3; pointer-events:none;
+    font-size:12px; font-weight:900; color:#1c1201; text-align:left;
+    transform:translateX(2px); white-space:nowrap;
+  }
+
+  .slot{
+    position:absolute; width:var(--slot-w); height:var(--slot-h);
+    border-radius:999px; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:0 8px; z-index:3;
+    background:var(--cap-bg); border:2px dashed var(--cap-b); color:#2a1a00; font-weight:700;
+  }
+  .slot.hover{box-shadow:0 0 0 4px rgba(0,0,0,.08)}
+
+  .label{
+    position:absolute; width:var(--slot-w); padding:0 2px; background:transparent; border:0; height:auto; z-index:3;
+    color:#1a1200; font-weight:800; font-size:14px; text-align:center; pointer-events:none;
+  }
+
+  .end{text-align:center;padding:10px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div id="app-anc" class="wrap">
+  <h1>Ancient History</h1>
+  <div class="sub">Drag each <b>event</b> to its year.</div>
+
+  <div class="panel">
+    <div class="bar">
+      <div class="hud">
+        <span class="pill">⏱️ Time: <span id="time-anc">00:00</span></span>
+        <span class="pill">✅ Correct: <span id="correct-anc">0</span></span>
+        <span class="pill">🎯 Attempts: <span id="tries-anc">0</span></span>
+      </div>
+      <div class="bar">
+        <button id="start-anc" class="primary">Start</button>
+        <button id="restart-anc">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane-wrap">
+    <div class="lane" id="lane-anc">
+      <div class="axis"></div>
+      <div id="ticks-anc"></div>
+      <div id="slots-anc"></div>
+    </div>
+  </div>
+
+  <div class="chips" id="chips-anc" style="margin-top:8px"></div>
+
+  <div id="end-anc" class="panel hidden end">
+    <h3>You finished!</h3>
+    <p id="summary-anc"></p>
+    <button class="primary" id="again-anc">Play Again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root=document.getElementById('app-anc');
+  const q=s=>root.querySelector(s);
+  const qa=s=>Array.from(root.querySelectorAll(s));
+  const uid=()=>('id-'+Math.random().toString(36).slice(2)+Date.now());
+
+  function dateKey(str){
+    const neg = /^-/.test(str);
+    const p = str.replace(/^-/,'').split('-');
+    const y = +(p[0]||'1'), m=+(p[1]||'1'), d=+(p[2]||'1');
+    const k=(y*12+(m-1))*31+(d-1);
+    return neg? -k : k;
+  }
+
+  /* Single-year points only — from your text */
+  const DATA = [
+    { tick:'c. 1800 B.C.', d:'-1800', label:'Hebrews in the Fertile Crescent' },
+    { tick:'1900 B.C.', d:'-1900', label:'Babylonian Empire begins' },
+    { tick:'1600 B.C.', d:'-1600', label:'Babylonian Empire ends' },
+    { tick:'c. 1500 B.C.', d:'-1500', label:'Aryans conquer India' },
+    { tick:'1500 B.C.', d:'-1500-06-01', label:'Latins move into Italy' },
+    { tick:'559 B.C.', d:'-0559', label:'Persian Empire begins' },
+    { tick:'330 B.C.', d:'-0330', label:'Persian Empire ends' },
+    { tick:'500 B.C.', d:'-0500', label:'Classical Age of Greece begins' },
+    { tick:'300 B.C.', d:'-0300', label:'Classical Age of Greece ends' },
+    { tick:'c. 350 B.C.', d:'-0350', label:'Hellenistic Age begins' },
+    { tick:'c. 150 B.C.', d:'-0150', label:'Hellenistic Age ends' },
+    { tick:'509 B.C.', d:'-0509', label:'Roman Republic founded' },
+    { tick:'27 B.C.',  d:'-0027', label:'Roman Republic ends' },
+    { tick:'264 B.C.', d:'-0264', label:'Punic Wars begin' },
+    { tick:'146 B.C.', d:'-0146', label:'Punic Wars end' },
+    { tick:'60 B.C.', d:'-0060', label:'Civil War in the Roman Republic' },
+    { tick:'03/15/44 B.C.', d:'-0044-03-15', label:'Julius Caesar assassinated' },
+    { tick:'A.D. 380', d:'0380', label:'Christianity official in the Empire' },
+    { tick:'A.D. 476', d:'0476', label:'Fall of the Western Roman Empire' },
+    { tick:'A.D. 500', d:'0500', label:'Germanic control of former Western Empire' },
+  ];
+
+  let state={events:[],ordered:[],cards:[],placed:0,tries:0,t0:0,timer:null};
+
+  function buildTimeline(){
+    const css=getComputedStyle(document.documentElement);
+    const W=parseInt(css.getPropertyValue('--slot-w'));
+    const H=parseInt(css.getPropertyValue('--slot-h'));
+    const AX=parseInt(css.getPropertyValue('--axis-top'));
+    const OFFT=parseInt(css.getPropertyValue('--off-top'));
+    const OFFB=parseInt(css.getPropertyValue('--off-bottom'));
+    const STEMSCALE=parseFloat(css.getPropertyValue('--stem-scale'))||0.65;
+
+    const slots=q('#slots-anc'); slots.innerHTML='';
+    const lane=q('#lane-anc');
+    lane.style.width='100%'; // fill container
+    const innerW=lane.getBoundingClientRect().width; // robust width
+
+    // order events chronologically
+    state.ordered = state.events.slice().sort((a,b)=>dateKey(a.d)-dateKey(b.d));
+    const n = state.ordered.length;
+    const step = innerW / n; // even spacing across width
+
+    // clear old stems/dates
+    qa('.stem,.date').forEach(n=>n.remove());
+
+    for(let i=0;i<n;i++){
+      const up   = (i%2===0);
+      const off  = up ? OFFT : OFFB;
+      const stemLen = Math.round(off * STEMSCALE);
+      const center = Math.round((i + 0.5) * step);
+      const left   = Math.round(center - W/2);
+
+      /* stem (gray), from axis toward capsule */
+      const stem=document.createElement('div');
+      stem.className='stem';
+      stem.style.left=(center-1)+'px';
+      stem.style.top = up ? (AX - stemLen)+'px' : (AX + 2)+'px';
+      stem.style.height = stemLen+'px';
+      lane.appendChild(stem);
+
+      /* date label: ABOVE axis for top slots, BELOW axis for bottom slots */
+      const date=document.createElement('div');
+      date.className='date';
+      date.style.left = center+'px';
+      date.style.top  = up ? (AX - 18)+'px' : (AX + 6)+'px';
+      date.textContent = state.ordered[i].tick;
+      lane.appendChild(date);
+
+      /* capsule slot */
+      const slot=document.createElement('div');
+      slot.className='slot';
+      slot.dataset.idx=i;
+      slot.style.left=left+'px';
+      slot.style.top = up ? (AX - off - H)+'px' : (AX + off)+'px';
+      slots.appendChild(slot);
+    }
+  }
+
+  function buildChips(){
+    const tray=q('#chips-anc'); tray.innerHTML='';
+    state.cards = state.events.map(e=>({id:e.id,t:e.label,d:e.d}));
+    // shuffle
+    for(let i=state.cards.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [state.cards[i],state.cards[j]]=[state.cards[j],state.cards[i]]; }
+    state.cards.forEach(e=>{
+      const c=document.createElement('div'); c.className='chip'; c.id='chip-'+e.id; c.textContent=e.t;
+      tray.appendChild(c); attachDrag(c,e.id);
+    });
+  }
+
+  function attachDrag(el,id){
+    let offX=0,offY=0,ghost=null,hot=null;
+    const down=(ev)=>{
+      const p=(ev.touches?.[0])||ev, r=el.getBoundingClientRect();
+      offX=p.clientX-r.left; offY=p.clientY-r.top;
+      ghost=el.cloneNode(true); ghost.classList.add('ghost','chip','dragging');
+      ghost.style.width=r.width+'px'; ghost.style.height=r.height+'px';
+      document.body.appendChild(ghost); el.style.visibility='hidden';
+      move(p.clientX,p.clientY);
+      window.addEventListener('pointermove', mv, {passive:false});
+      window.addEventListener('pointerup', up, {once:true});
+      window.addEventListener('touchmove', mv, {passive:false});
+      window.addEventListener('touchend', up, {once:true});
+      ev.preventDefault();
+    };
+    const move=(cx,cy)=>{
+      ghost.style.transform=`translate3d(${cx-offX}px,${cy-offY}px,0)`;
+      const u=document.elementFromPoint(cx,cy);
+      const slot=u?.closest?.('.slot');
+      if(slot){ if(hot&&hot!==slot) hot.classList.remove('hover'); hot=slot; hot.classList.add('hover'); }
+      else if(hot){ hot.classList.remove('hover'); hot=null; }
+    };
+    const mv=(ev)=>{ const p=(ev.touches?.[0])||ev; move(p.clientX,p.clientY); ev.preventDefault(); };
+    const up=()=>{
+      qa('.slot.hover').forEach(s=>s.classList.remove('hover'));
+      if(hot){ place(id,hot); ghost.remove(); return; }
+      el.style.visibility=''; ghost.remove();
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('touchstart', down, {passive:false});
+  }
+
+  function place(id,slot){
+    const want=+slot.dataset.idx;
+    const rank=state.ordered.findIndex(x=>x.id===id);
+
+    state.tries++; q('#tries-anc').textContent=state.tries;
+
+    if(rank===want){
+      const card=state.cards.find(x=>x.id===id);
+
+      // replace capsule with clean text slightly nudged further from the axis
+      const topPx=parseInt(slot.style.top,10);
+      const AX=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--axis-top'));
+      const nudge=8;
+      const label=document.createElement('div');
+      label.className='label';
+      label.style.left=slot.style.left;
+      label.style.top = (topPx + (topPx>AX ? nudge : -nudge))+'px';
+      label.textContent=card.t;
+
+      slot.replaceWith(label);
+      q('#chip-'+id)?.remove();
+
+      state.placed++; q('#correct-anc').textContent=state.placed;
+      if(state.placed===state.cards.length) finish();
+    }else{
+      q('#chip-'+id)?.style.removeProperty('visibility'); // snap back
+    }
+  }
+
+  /* Timer / scoring */
+  const fmt=ms=>{const s=Math.floor(ms/1000),m=Math.floor(s/60),ss=String(s%60).padStart(2,'0');return String(m).padStart(2,'0')+':'+ss;};
+  function startTimer(){ state.t0=Date.now(); clearInterval(state.timer); state.timer=setInterval(()=>{ q('#time-anc').textContent=fmt(Date.now()-state.t0); }, 200); }
+  function stopTimer(){ clearInterval(state.timer); state.timer=null; }
+
+  function start(){
+    state.events = DATA.map(e=>({id:uid(), ...e}));
+    state.placed=0; state.tries=0;
+    q('#correct-anc').textContent='0'; q('#tries-anc').textContent='0'; q('#time-anc').textContent='00:00';
+    buildTimeline(); buildChips(); q('#end-anc').classList.add('hidden'); startTimer();
+  }
+  function finish(){
+    stopTimer();
+    const total=state.cards.length;
+    const elapsed=fmt(Date.now()-state.t0);
+    q('#summary-anc').textContent=`Time: ${elapsed} · Correct: ${state.placed}/${total} · Attempts: ${state.tries}`;
+    q('#end-anc').classList.remove('hidden');
+  }
+
+  q('#start-anc').addEventListener('click', start);
+  q('#restart-anc').addEventListener('click', start);
+  q('#again-anc')?.addEventListener('click', start);
+})();
+</script>
+</body>
+</html>
