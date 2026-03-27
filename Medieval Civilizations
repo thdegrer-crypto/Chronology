@@ -341,4 +341,17 @@
     buildTimeline(); buildChips(); q('#end-anc').classList.add('hidden'); startTimer();
   }
   function finish(){
-    st
+    stopTimer();
+    const total=state.cards.length;
+    const elapsed=fmt(Date.now()-state.t0);
+    q('#summary-anc').textContent=`Time: ${elapsed} · Correct: ${state.placed}/${total} · Attempts: ${state.tries}`;
+    q('#end-anc').classList.remove('hidden');
+  }
+
+  q('#start-anc').addEventListener('click', start);
+  q('#restart-anc').addEventListener('click', start);
+  q('#again-anc')?.addEventListener('click', start);
+})();
+</script>
+</body>
+</html>
