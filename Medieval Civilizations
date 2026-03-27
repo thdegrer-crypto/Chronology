@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Medieval History</title>
+<style>
+  :root{
+    /* Compact spacing */
+    --slot-w:80px; --slot-h:34px; --gap:4px;
+
+    /* Axis & offsets */
+    --lane-h:210px; --axis-top:108px;
+    --off-top:80px;     /* top capsule distance from axis */
+    --off-bottom:50px;  /* bottom capsule distance (raised closer to axis) */
+    --stem-scale:0.65;  /* stems are 65% of the offset */
+
+    /* Medieval palette (stone + gilded accents) */
+    --fg:#1d1b16;
+    --muted:#4b4537;
+    --bg1:#e8dcb9; --bg2:#d6c7a1; --bg3:#b9a480;  /* parchment gradient */
+    --panel:#efe6cf; --panel-b:#a08e6b;
+
+    /* Buttons */
+    --btn:#cf5950; --btn-b:#a14d14; --btnH:#cc5a16;
+    --btnP:#b1271e; --btnP-b:#8b1d1d; --btnP-H:#7c3a19;
+
+    /* Timeline colors */
+    --axis:#000;  /* black axis */
+    --stem:#777;  /* medium gray stems */
+
+    /* Capsules & chips */
+    --cap-bg:rgba(255,242,155,0.78); --cap-b:#a5691c;
+    --chip-bg:#fff9e6; --chip-b:#a5691c;
+  }
+
+  *{box-sizing:border-box}
+  html,body{
+    margin:0; font-family:system-ui,Segoe UI,Roboto,sans-serif; color:var(--fg);
+    background:linear-gradient(to bottom, var(--bg1) 0%, var(--bg2) 50%, var(--bg3) 100%);
+  }
+  .wrap{width:100%;padding:16px 10px}
+  h1{margin:0 0 4px;font-size:26px}
+  .sub{color:var(--muted);margin-bottom:10px}
+
+  button{background:var(--btn);color:var(--fg);border:1px solid var(--btn-b);border-radius:12px;padding:8px 12px;cursor:pointer;transition:background .2s}
+  button:hover{background:var(--btnH)}
+  button.primary{background:var(--btnP);border:1px solid var(--btnP-b);color:#fff;font-weight:700}
+  button.primary:hover{background:var(--btnP-H)}
+
+  .panel{background:#ffe9b388;border:1px solid #a5691c;border-radius:14px;padding:10px;margin-bottom:10px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+  .hud{display:flex;gap:14px;align-items:center;font-weight:700;color:#3a2606}
+  .hud .pill{padding:4px 8px;border:1px solid #a5691c;border-radius:999px;background:#fff9e0}
+
+  .chips{display:flex;flex-wrap:wrap;gap:6px;padding:6px;background:#fff4d7;border:1px solid var(--chip-b);border-radius:10px}
+  .chip{
+    user-select:none; -webkit-user-select:none; touch-action:none;
+    background:var(--chip-bg); border:1px solid var(--chip-b);
+    padding:6px 10px; border-radius:999px; box-shadow:0 4px 10px rgba(0,0,0,.08);
+    cursor:grab; font-weight:600; font-size:14px; white-space:nowrap; max-width:360px; overflow:hidden; text-overflow:ellipsis;
+  }
+  .chip.dragging{opacity:.93;cursor:grabbing;box-shadow:0 8px 16px rgba(0,0,0,.18)}
+  .ghost{position:fixed;left:0;top:0;pointer-events:none;z-index:9999;transform:translate3d(0,0,0)}
+
+  /* Timeline */
+  .lane-wrap{position:relative;border:1px solid #d8c195;background:#fff;border-radius:12px;padding:14px;overflow-x:hidden}
+  .lane{position:relative;height:var(--lane-h);min-width:100%}
+  .axis{position:absolute;left:0;right:0;top:var(--axis-top);height:2px;background:var(--axis);z-index:2;pointer-events:none}
+
+  .stem{position:absolute;width:2px;background:var(--stem);z-index:2;pointer-events:none}
+
+  /* Date labels; we place them above for top slots, below for bottom slots */
+  .date{
+    position:absolute; z-index:3; pointer-events:none;
+    font-size:12px; font-weight:900; color:#1c1201; text-align:left;
+    transform:translateX(2px); white-space:nowrap;
+  }
+
+  .slot{
+    position:absolute; width:var(--slot-w); height:var(--slot-h);
+    border-radius:999px; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:0 8px; z-index:3;
+    background:var(--cap-bg); border:2px dashed var(--cap-b); color:#2a1a00; font-weight:700;
+  }
+  .slot.hover{box-shadow:0 0 0 4px rgba(0,0,0,.08)}
+
+  .label{
+    position:absolute; width:var(--slot-w); padding:0 2px; background:transparent; border:0; height:auto; z-index:3;
+    color:#1a1200; font-weight:800; font-size:14px; text-align:center; pointer-events:none;
+  }
+
+  .end{text-align:center;padding:10px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div id="app-anc" class="wrap">
+  <h1>Ancient History</h1>
+  <div class="sub">Drag each <b>event</b> to its year.</div>
+
+  <div class="panel">
+    <div class="bar">
+      <div class="hud">
+        <span class="pill">⏱️ Time: <span id="time-anc">00:00</span></span>
+        <span class="pill">✅ Correct: <span id="correct-anc">0</span></span>
+        <span class="pill">🎯 Attempts: <span id="tries-anc">0</span></span>
+      </div>
+      <div class="bar">
+        <button id="start-anc" class="primary">Start</button>
+        <button id="restart-anc">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="lane-wrap">
+    <div class="lane" id="lane-anc">
+      <div class="axis"></div>
+      <div id="ticks-anc"></div>
+      <div id="slots-anc"></div>
+    </div>
+  </div>
+
+  <div class="chips" id="chips-anc" style="margin-top:8px"></div>
+
+  <div id="end-anc" class="panel hidden end">
+    <h3>You finished!</h3>
+    <p id="summary-anc"></p>
+    <button class="primary" id="again-anc">Play Again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root=document.getElementById('app-anc');
+  const q=s=>root.querySelector(s);
+  const qa=s=>Array.from(root.querySelectorAll(s));
+  const uid=()=>('id-'+Math.random().toString(36).slice(2)+Date.now());
+
+  function dateKey(str){
+    const neg = /^-/.test(str);
+    const p = str.replace(/^-/,'').split('-');
+    const y = +(p[0]||'1'), m=+(p[1]||'1'), d=+(p[2]||'1');
+    const k=(y*12+(m-1))*31+(d-1);
+    return neg? -k : k;
+  }
+
+  /* Single-year points only — from your text */
+ const DATA = [
+  { tick:"A.D. 476", d:"0476", label:"Medieval Ages begin" },
+  { tick:"500s", d:"0500", label:"Justinian expands Eastern Roman Empire" },
+  { tick:"1453", d:"1453", label:"Eastern Roman Empire falls to Muslim Turks" },
+  { tick:"600s", d:"0600", label:"Arab Muslims conquer the Holy Land" },
+  { tick:"1054", d:"1054", label:"Great Schism divides the Church" },
+  { tick:"51 B.C.", d:"-0051", label:"Germanic barbarians practice human sacrifices" },
+  { tick:"485", d:"0485", label:"Clovis I crowned King of the Franks" },
+  { tick:"732", d:"0732", label:"Charles Martel stops Muslim advance into France" },
+  { tick:"800", d:"0800", label:"Charlemagne crowned Holy Roman Emperor" },
+  { tick:"A.D. 43", d:"0043", label:"Romans conquer Britain" },
+  { tick:"410", d:"0410", label:"Roman soldiers withdraw from Britain" },
+  { tick:"800", d:"0800", label:"Alfred the Great rules England" },
+  { tick:"1000", d:"1000", label:"Viking invasions of Britain end" },
+  { tick:"1066", d:"1066", label:"William the Conqueror wins the Battle of Hastings" },
+  { tick:"500", d:"0500", label:"Slavs settle along Black and Baltic rivers" },
+  { tick:"800", d:"0800", label:"Swedish Vikings conquer Russian Slavs" },
+  { tick:"900", d:"0900", label:"Russians convert to Christianity" },
+  { tick:"1200", d:"1200", label:"Mongols conquer the Russians" },
+  { tick:"638", d:"0638", label:"Muslims conquer the Holy Land" },
+  { tick:"1015", d:"1015", label:"Crusades begin" },
+  { tick:"1241", d:"1241", label:"Crusades end" },
+  { tick:"1215", d:"1215", label:"Magna Carta limits English King's power" },
+  { tick:"1289", d:"1289", label:"England establishes Parliament" },
+  { tick:"700", d:"0700", label:"Muslim Moors begin ruling Spain and Portugal" },
+  { tick:"1492", d:"1492", label:"Christian Reconquista ends Muslim rule in Spain" },
+  { tick:"1337", d:"1337", label:"Hundred Years' War begins" },
+  { tick:"1453", d:"1453", label:"Hundred Years' War ends" },
+  { tick:"1347", d:"1347", label:"Black Death begins in Europe" },
+  { tick:"1400", d:"1400", label:"Black Death ends" },
+  { tick:"570", d:"0570", label:"Birth of Muhammad" },
+  { tick:"600", d:"0600", label:"Muslim conquests begin" },
+  { tick:"1100", d:"1100", label:"Muslim conquests end" },
+  { tick:"700", d:"0700", label:"Start of Islamic Golden Age" },
+  { tick:"1200", d:"1200", label:"End of Islamic Golden Age" },
+  { tick:"1000", d:"1000", label:"Beginning of the 11th century" },
+  { tick:"1099", d:"1099", label:"End of the 11th century; Turks establish empire" },
+  { tick:"1453", d:"1453", label:"Ottomans conquer Constantinople (Byzantium)" },
+  { tick:"1492", d:"1492", label:"Spanish victory in the Reconquista" },
+  { tick:"900", d:"0900", label:"Islam spreads to East Africa" },
+  { tick:"1480", d:"1480", label:"Portugal conquers Swahili city-states" },
+  { tick:"1500 B.C.", d:"-1500", label:"Mayan civilization begins" },
+  { tick:"1519", d:"1519", label:"Mayan civilization ends" },
+  { tick:"1100", d:"1100", label:"Incan civilization begins" },
+  { tick:"1532", d:"1532", label:"Incan civilization ends" },
+  { tick:"1200", d:"1200", label:"Aztec Empire begins" },
+  { tick:"1521", d:"1521", label:"Aztec Empire ends" },
+  { tick:"1527", d:"1527", label:"Martin Luther begins the Reformation" },
+  { tick:"1400", d:"1400", label:"Start of Age of Exploration" },
+  { tick:"1700", d:"1700", label:"End of Age of Exploration" },
+  { tick:"700", d:"0700", label:"Reconquista begins" },
+  { tick:"1492", d:"1492", label:"Reconquista ends" }
+];
+
+  let state={events:[],ordered:[],cards:[],placed:0,tries:0,t0:0,timer:null};
+
+  function buildTimeline(){
+    const css=getComputedStyle(document.documentElement);
+    const W=parseInt(css.getPropertyValue('--slot-w'));
+    const H=parseInt(css.getPropertyValue('--slot-h'));
+    const AX=parseInt(css.getPropertyValue('--axis-top'));
+    const OFFT=parseInt(css.getPropertyValue('--off-top'));
+    const OFFB=parseInt(css.getPropertyValue('--off-bottom'));
+    const STEMSCALE=parseFloat(css.getPropertyValue('--stem-scale'))||0.65;
+
+    const slots=q('#slots-anc'); slots.innerHTML='';
+    const lane=q('#lane-anc');
+    lane.style.width='100%'; // fill container
+    const innerW=lane.getBoundingClientRect().width; // robust width
+
+    // order events chronologically
+    state.ordered = state.events.slice().sort((a,b)=>dateKey(a.d)-dateKey(b.d));
+    const n = state.ordered.length;
+    const step = innerW / n; // even spacing across width
+
+    // clear old stems/dates
+    qa('.stem,.date').forEach(n=>n.remove());
+
+    for(let i=0;i<n;i++){
+      const up   = (i%2===0);
+      const off  = up ? OFFT : OFFB;
+      const stemLen = Math.round(off * STEMSCALE);
+      const center = Math.round((i + 0.5) * step);
+      const left   = Math.round(center - W/2);
+
+      /* stem (gray), from axis toward capsule */
+      const stem=document.createElement('div');
+      stem.className='stem';
+      stem.style.left=(center-1)+'px';
+      stem.style.top = up ? (AX - stemLen)+'px' : (AX + 2)+'px';
+      stem.style.height = stemLen+'px';
+      lane.appendChild(stem);
+
+      /* date label: ABOVE axis for top slots, BELOW axis for bottom slots */
+      const date=document.createElement('div');
+      date.className='date';
+      date.style.left = center+'px';
+      date.style.top  = up ? (AX - 18)+'px' : (AX + 6)+'px';
+      date.textContent = state.ordered[i].tick;
+      lane.appendChild(date);
+
+      /* capsule slot */
+      const slot=document.createElement('div');
+      slot.className='slot';
+      slot.dataset.idx=i;
+      slot.style.left=left+'px';
+      slot.style.top = up ? (AX - off - H)+'px' : (AX + off)+'px';
+      slots.appendChild(slot);
+    }
+  }
+
+  function buildChips(){
+    const tray=q('#chips-anc'); tray.innerHTML='';
+    state.cards = state.events.map(e=>({id:e.id,t:e.label,d:e.d}));
+    // shuffle
+    for(let i=state.cards.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [state.cards[i],state.cards[j]]=[state.cards[j],state.cards[i]]; }
+    state.cards.forEach(e=>{
+      const c=document.createElement('div'); c.className='chip'; c.id='chip-'+e.id; c.textContent=e.t;
+      tray.appendChild(c); attachDrag(c,e.id);
+    });
+  }
+
+  function attachDrag(el,id){
+    let offX=0,offY=0,ghost=null,hot=null;
+    const down=(ev)=>{
+      const p=(ev.touches?.[0])||ev, r=el.getBoundingClientRect();
+      offX=p.clientX-r.left; offY=p.clientY-r.top;
+      ghost=el.cloneNode(true); ghost.classList.add('ghost','chip','dragging');
+      ghost.style.width=r.width+'px'; ghost.style.height=r.height+'px';
+      document.body.appendChild(ghost); el.style.visibility='hidden';
+      move(p.clientX,p.clientY);
+      window.addEventListener('pointermove', mv, {passive:false});
+      window.addEventListener('pointerup', up, {once:true});
+      window.addEventListener('touchmove', mv, {passive:false});
+      window.addEventListener('touchend', up, {once:true});
+      ev.preventDefault();
+    };
+    const move=(cx,cy)=>{
+      ghost.style.transform=`translate3d(${cx-offX}px,${cy-offY}px,0)`;
+      const u=document.elementFromPoint(cx,cy);
+      const slot=u?.closest?.('.slot');
+      if(slot){ if(hot&&hot!==slot) hot.classList.remove('hover'); hot=slot; hot.classList.add('hover'); }
+      else if(hot){ hot.classList.remove('hover'); hot=null; }
+    };
+    const mv=(ev)=>{ const p=(ev.touches?.[0])||ev; move(p.clientX,p.clientY); ev.preventDefault(); };
+    const up=()=>{
+      qa('.slot.hover').forEach(s=>s.classList.remove('hover'));
+      if(hot){ place(id,hot); ghost.remove(); return; }
+      el.style.visibility=''; ghost.remove();
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('touchstart', down, {passive:false});
+  }
+
+  function place(id,slot){
+    const want=+slot.dataset.idx;
+    const rank=state.ordered.findIndex(x=>x.id===id);
+
+    state.tries++; q('#tries-anc').textContent=state.tries;
+
+    if(rank===want){
+      const card=state.cards.find(x=>x.id===id);
+
+      // replace capsule with clean text slightly nudged further from the axis
+      const topPx=parseInt(slot.style.top,10);
+      const AX=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--axis-top'));
+      const nudge=8;
+      const label=document.createElement('div');
+      label.className='label';
+      label.style.left=slot.style.left;
+      label.style.top = (topPx + (topPx>AX ? nudge : -nudge))+'px';
+      label.textContent=card.t;
+
+      slot.replaceWith(label);
+      q('#chip-'+id)?.remove();
+
+      state.placed++; q('#correct-anc').textContent=state.placed;
+      if(state.placed===state.cards.length) finish();
+    }else{
+      q('#chip-'+id)?.style.removeProperty('visibility'); // snap back
+    }
+  }
+
+  /* Timer / scoring */
+  const fmt=ms=>{const s=Math.floor(ms/1000),m=Math.floor(s/60),ss=String(s%60).padStart(2,'0');return String(m).padStart(2,'0')+':'+ss;};
+  function startTimer(){ state.t0=Date.now(); clearInterval(state.timer); state.timer=setInterval(()=>{ q('#time-anc').textContent=fmt(Date.now()-state.t0); }, 200); }
+  function stopTimer(){ clearInterval(state.timer); state.timer=null; }
+
+  function start(){
+    state.events = DATA.map(e=>({id:uid(), ...e}));
+    state.placed=0; state.tries=0;
+    q('#correct-anc').textContent='0'; q('#tries-anc').textContent='0'; q('#time-anc').textContent='00:00';
+    buildTimeline(); buildChips(); q('#end-anc').classList.add('hidden'); startTimer();
+  }
+  function finish(){
+    st
